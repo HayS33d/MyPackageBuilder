@@ -1,0 +1,188 @@
+<html>
+<head>
+<title>MSI Package Builder By HayS33D</title>
+<HTA:APPLICATION
+  APPLICATIONNAME="MSI Package Builder"
+  ID="MyHTMLapplication"
+  VERSION="1.0"/>
+</head>
+
+<script language="VBScript">
+Const INSTALLFILE_NAME 	 	= "runme.bat"
+CONST TS_FILE_NAME		= "tsinstall.bat"
+Const UNINSTALLFILE_NAME  	= "uninstall.bat"
+Const FOR_WRITING 		= 2
+Const REG_QUERY_UNINSTALL_32 	= "REG QUERY HKLM\Software\microsoft\windows\currentversion\uninstall\"
+Const REG_QUERY_UNINSTALL_64 	= "REG QUERY HKLM\Software\wow6432Node\microsoft\windows\currentversion\uninstall\"
+Const REG_VALUE_TO_CHECK  	= "DisplayVersion "
+DIM   MSIFILE
+Sub Window_OnLoad
+  'This method will be called when the application loads
+  'Add your code here
+	
+End Sub
+
+Function GetMSIPropertyValue(sProperty, sMSIFile)
+	Set oInstaller=CreateObject("windowsinstaller.installer")
+	Set oMSI=oInstaller.OpenDatabase(sMSIFile,2)
+	Set oMSIView=oMSi.OpenView("SELECT Value from Property WHERE Property = '" & sProperty & "'")
+	oMSIView.Execute
+	Set Rec = oMsiview.Fetch
+	GetMSIPropertyValue = rec.StringData(1)
+End Function
+
+'Sub MSIFile_onchange
+	'ProdName.InnerHTML = GetMSIPropertyValue("ProductName", MSIFILE)
+	'ProdGUID.InnerHTML = GetMSIPropertyValue("ProductCode", MSIFILE)
+	'ProdVer.InnerHTML  = GetMSIPropertyValue("ProductVersion", MSIFILE)
+'End Sub
+Sub FileInput_onchange
+	set oFso = CreateObject("scripting.filesystemobject")
+	set oFile = oFso.getFile(FileInput.Value)
+	MSIFILE = oFile.Name
+	ProdName.InnerHTML = GetMSIPropertyValue("ProductName", MSIFILE)
+	ProdGUID.InnerHTML = GetMSIPropertyValue("ProductCode", MSIFILE)
+	ProdVer.InnerHTML  = GetMSIPropertyValue("ProductVersion", MSIFILE)
+End Sub
+
+Sub BuildTSInstall
+	Set oBatchTSFso = CreateObject("scripting.filesystemobject")
+	If Not oBatchTSFso.FileExists(TS_FILE_NAME) Then
+		oBatchTSFso.CreateTextFile(TS_FILE_NAME)
+	End If
+	Set oInstallFile = oBatchTSFso.OpenTextFile(TS_FILE_NAME,FOR_WRITING)
+	oInstallFile.WriteLine "msiexec /i " & """" & "%~dp0" & MSIFILE & """" & " /q "
+	oInstallFile.close
+	
+End Sub
+
+Sub CreateBatchInstallFile
+		Set oBatchFso = CreateObject("scripting.filesystemobject")
+
+	If Not oBatchFso.FileExists(INSTALLFILE_NAME) Then
+		oBatchFso.CreateTextFile(INSTALLFILE_NAME)
+	End If
+	Set oInstallFile = oBatchFso.OpenTextFile(INSTALLFILE_NAME,FOR_WRITING)
+	oInstallFile.WriteLine "::Created with MSI PB - HayS33D" 
+	oInstallFile.WriteLine "::" & ProdName.innerhtml
+	oInstallFile.WriteLine "::7002 = Already Installed"
+	oInstallFile.WriteLine "::7009 = Installation Failed"
+	oInstallFile.WriteLine "SET PRODVERSION=" & ProdVer.InnerHTML
+	oInstallFile.WriteLine "SET PRODGUID="& prodGUID.InnerHtml
+	
+	If CheckApplicationExists.checked = True Then
+		oInstallFile.WriteLine REG_QUERY_UNINSTALL_32 & "%PRODGUID% /v " & REG_VALUE_TO_CHECK & "|find " & """%PRODVERSION%"""
+		oInstallFile.WriteLine "IF %ERRORLEVEL%==0 goto :AlreadyInstalled"
+		oInstallFile.WriteLine REG_QUERY_UNINSTALL_64 & "%PRODGUID% /v " & REG_VALUE_TO_CHECK & "|find " & """%PRODVERSION%"""
+		oInstallFile.WriteLine "IF %ERRORLEVEL%==0 goto :AlreadyInstalled"
+	End If
+	'If CheckExistingGUIDS.checked = True Then
+	'	myGuids = Split(GUIDS.value,vbcrlf)
+	'	For Each guid In MyGUIDS
+	'		CurrentGUIDProccessed = Split(GUID, ",")
+	'		oInstallFile.WriteLine REG_QUERY_UNINSTALL_32 & CurrentGUIDProccessed(0) 
+	'		oInstallFile.WriteLine "IF %ERRORLEVEL%==0 goto :GUIDExists " & CurrentGUIDProccessed(1)
+	'		oInstallFile.WriteLine REG_QUERY_UNINSTALL_64 & CurrentGUIDProccessed(0)
+	'		oInstallFile.WriteLine "IF %ERRORLEVEL%==0 goto :GUIDExists " & CurrentGUIDProccessed(1)
+	'	Next
+	'End If
+	
+	oInstallFile.WriteLine "msiexec /i " & """" & "%~dp0" & MSIFILE & """" & " /q "
+	If CheckUninstallKey.checked = True Then
+		oInstallFile.WriteLine REG_QUERY_UNINSTALL_32 & "%PRODGUID% /v " & REG_VALUE_TO_CHECK & "|find " & """%PRODVERSION%"""
+		oInstallFile.WriteLine "IF %ERRORLEVEL%==0 exit 0"
+		oInstallFile.WriteLine REG_QUERY_UNINSTALL_64 & "%PRODGUID% /v " & REG_VALUE_TO_CHECK & "|find " & """%PRODVERSION%"""
+		oInstallFile.WriteLine "IF %ERRORLEVEL%==0 exit 0"
+		oInstallFile.WriteLine "exit 7009"
+	End If
+	If CheckApplicationExists.checked = True Then
+		oInstallFile.WriteLine ""
+		oInstallFile.WriteLine "::Installation Already Exists"
+		oInstallFile.WriteLine ":AlreadyInstalled"
+		oInstallFile.WriteLine "exit 7002"
+	End If
+	'If CheckExistingGUIDS.checked = True Then
+	'	oInstallFile.WriteLine ""
+	'	oInstallFile.WriteLine "::Other GUID Exists"
+	'	oInstallFile.WriteLine ":GUIDExists"
+	'	oInstallFile.WriteLine "echo %1 > c:\temp\" & ProdName.innerhtml & "-failed.txt"
+	'	oInstallFile.WriteLine "exit 7003"
+	'End If
+	
+	If CreateUninstall.checked = True Then
+		Set oUnBatchFso = CreateObject("scripting.filesystemobject")
+		If Not oBatchFso.FileExists(UNINSTALLFILE_NAME) Then
+			oBatchFso.CreateTextFile(UNINSTALLFILE_NAME)
+		End If
+
+		Set oUnInstallFile = oBatchFso.OpenTextFile(UNINSTALLFILE_NAME,FOR_WRITING)
+		oUninstallFile.WriteLine "SET PRODVERSION=" & ProdVer.innerhtml
+		oUninstallFile.WriteLine "SET PRODGUID=" & ProdGuid.innerhtml
+		oUnInstallFile.WriteLine "msiexec /x" & ProdGuid.innerhtml & " /q"
+		oUnInstallFile.WriteLine REG_QUERY_UNINSTALL_32 & "%PRODGUID% /v " & REG_VALUE_TO_CHECK & "|find " & """%PRODVERSION%"""
+		oUnInstallFile.WriteLine "IF %ERRORLEVEL%==0 exit 7001"
+		oUnInstallFile.WriteLine REG_QUERY_UNINSTALL_64 & "%PRODGUID% /v " & REG_VALUE_TO_CHECK & "|find " & """%PRODVERSION%"""
+		oUnInstallFile.WriteLine "IF %ERRORLEVEL%==0 Exit 7001"
+		oUnInstallFile.WriteLine "Exit 0"
+	End If
+	oInstallFile.WriteLine "exit 7009"
+	BuildTSInstall
+	MsgBox "DONE"
+	
+End Sub
+
+
+Sub OnClickButtonGo()
+  'This method will be called when button "Go" is clicked
+  'Add your code here
+End Sub
+</script>
+
+<body bgcolor="white">
+  <strong>Executable File(file.msi)
+</input>
+  </strong><br>
+<!--<input name="MSIFile" id="MSIFile" rows="1" cols="50">-->
+<input type = "file" ID="FileInput" class="msi">
+<table width="98%" border="1">
+  <tr>
+    <td>Product Name</td>
+    <td><label id=ProdName></label><br></td>
+  </tr>
+  <tr>
+    <td>GUID </td>
+    <td><label id=ProdGUID></label></td>
+  </tr>
+  <tr>
+    <td>Version</td>
+    <td><label id=ProdVer></label></td>
+  </tr>
+</table>
+<p>
+  <input type="checkbox" name="CreateUninstall" id="CreateUninstall">
+  Create Uninstall<br>
+<input type="checkbox" name="CheckUninstallKey" id="CheckUninstallKey">
+ Verify Via Registry UNINSTALL Key</label>
+ <br>
+<input type="checkbox" name="CheckApplicationExists" id="CheckUninstallKey3">
+Check if Already Installed<br>
+<!--<input type="checkbox" name="CheckExistingGUIDS" id="CheckUninstallKey4"> 
+Check Existing GUIDS<br> If any of these exist the software will not install (Acrobat had several different GUIDS in the 9 versions.)
+<label for="GUIDS"></label>
+  <textarea name="GUIDS" id="GUIDS" cols="45" rows="5"></textarea>
+  <br>-->
+</p>
+<p> <br>
+</p>
+<p>&nbsp; </p>
+<p>
+  <br>
+
+  <br>
+</p>
+
+
+<input type="button" name="Go" id="Go" value="GO!" onclick="CreateBatchInstallFile">
+<!--{{InsertControlsHere}}-Do not remove this line-->
+</body>
+</html>
